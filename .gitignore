@@ -1,3 +1,6 @@
+# virtual environment for python
+myenv/
+
 .streamlit/secrets.toml
 
 # Byte-compiled / optimized / DLL files
