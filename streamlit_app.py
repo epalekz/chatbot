@@ -76,7 +76,8 @@ else:
             st.markdown(assistant_response)
         st.session_state.messages.append({"role": "assistant", "content": assistant_response})
 
-# Add a button to clear the conversation
-if st.button("Clear Conversation"):
-    st.session_state.messages = [st.session_state.messages[0]]  # Keep only the system message
-    st.experimental_rerun()
+# Only show the "Clear Conversation" button if there's more than just the system message
+if len(st.session_state.messages) > 1:
+    if st.button("Clear Conversation"):
+        st.session_state.messages = [st.session_state.messages[0]]  # Keep only the system message
+        st.experimental_rerun()
