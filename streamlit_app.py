@@ -1,5 +1,9 @@
+from streamlit.components.v1 import html
 import streamlit as st
 from openai import OpenAI
+import requests
+import base64
+from io import BytesIO
 
 # Initialize session state variables
 if "messages" not in st.session_state:
@@ -13,7 +17,8 @@ if "messages" not in st.session_state:
                 Realiza preguntas de seguimiento en caso de que la respuesta no sea clara o sea demasiado corta.                
                 Primero saluda al usuario y preguntale como esta.
                 Luego continua con la entrevista.                
-                Responde de manera corta y muy conversacional y amigable.                
+                Responde de manera corta y muy conversacional y amigable.        
+                Puedes hacer las preguntas en cualquier orden y no puedes repetir las preguntas.
                 Puedes utilizar algunas de las siguientes preguntas y algunas variantes sin cambiar el contexto:
                 Preguntas:
                     -Valoración y Reconocimiento:
@@ -50,20 +55,40 @@ if "messages" not in st.session_state:
     ]
 
 # Show title and description
-st.title("🤖 ChatBot")
+st.title("🤖 ChatBot with Text-to-Speech")
 st.write(
     "Description of the chatbot..."
-    "To use this app, you need to provide an OpenAI API key."
+    "To use this app, you need to provide an OpenAI API key and an ElevenLabs API key."
 )
 
 # Get OpenAI API key
 openai_api_key = st.text_input("OpenAI API Key", type="password")
+elevenlabs_api_key = st.text_input("ElevenLabs API Key", type="password")
 
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
+if not openai_api_key or not elevenlabs_api_key:
+    st.info("Please add your OpenAI and ElevenLabs API keys to continue.", icon="🗝️")
 else:
     # Create an OpenAI client
     client = OpenAI(api_key=openai_api_key)
+
+    # Function to generate speech using ElevenLabs API
+    def generate_speech(text, voice_id="pMsXgVXv3BLzUgSXRplE"): # voice_id="21m00Tcm4TlvDq8ikWAM"):
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+        headers = {
+            "Accept": "audio/mpeg",
+            "Content-Type": "application/json",
+            "xi-api-key": elevenlabs_api_key
+        }
+        data = {
+            "text": text,
+            "model_id": "eleven_monolingual_v1",
+            "voice_settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.5
+            }
+        }
+        response = requests.post(url, json=data, headers=headers)
+        return response.content
 
     st.write("Hola. Soy el chatbot Epami, gracias por tomarte el tiempo para realizar esta entrevista. Vamos a comenzar. No estas obligado a responder las preguntas que no quieras, simplemente puedes decirme que pasemos a la siguiente. Si alguna pregunta no se entiende, puedes pedirme que la repite. Vamos a comenzar.")
 
@@ -72,6 +97,9 @@ else:
         if message["role"] != "system":
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
+                if message["role"] == "assistant":
+                    audio = generate_speech(message["content"])
+                    st.audio(audio, format="audio/mp3")
 
     # Chat input
     if prompt := st.chat_input("Hola ¿Como esta usted?"):
@@ -90,6 +118,8 @@ else:
         assistant_response = response.choices[0].message.content
         with st.chat_message("assistant"):
             st.markdown(assistant_response)
+            audio = generate_speech(assistant_response)
+            st.audio(audio, format="audio/mp3")
         st.session_state.messages.append({"role": "assistant", "content": assistant_response})
 
 # Only show the "Clear Conversation" button if there's more than just the system message
