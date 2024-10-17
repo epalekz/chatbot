@@ -1,9 +1,11 @@
-from streamlit.components.v1 import html
 import streamlit as st
 from openai import OpenAI
 import requests
 import base64
 from io import BytesIO
+import json
+
+url = "https://jamtools.co/api/submit"
 
 # Initialize session state variables
 if "messages" not in st.session_state:
@@ -72,7 +74,26 @@ else:
     client = OpenAI(api_key=openai_api_key)
 
     # Function to generate speech using ElevenLabs API
-    def generate_speech(text, voice_id="pMsXgVXv3BLzUgSXRplE"): # voice_id="21m00Tcm4TlvDq8ikWAM"):
+    def generate_speech(text, voice_id="IOyj8WtBHdke2FjQgGAr"): # voice_id="pMsXgVXv3BLzUgSXRplE"): # voice_id="21m00Tcm4TlvDq8ikWAM"):
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+        headers = {
+            "Accept": "audio/mpeg",
+            "Content-Type": "application/json",
+            "xi-api-key": elevenlabs_api_key
+        }
+        data = {
+            "text": text,
+            "model_id": "eleven_monolingual_v1",
+            "voice_settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.5
+            }
+        }
+        response = requests.post(url, json=data, headers=headers)
+        return response.content
+    
+    # Function to generate speech summary using ChatGPT
+    def generate_summary(text, voice_id="IOyj8WtBHdke2FjQgGAr"): # voice_id="pMsXgVXv3BLzUgSXRplE"): # voice_id="21m00Tcm4TlvDq8ikWAM"):
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
         headers = {
             "Accept": "audio/mpeg",
@@ -91,18 +112,18 @@ else:
         return response.content
 
     st.write("Hola. Soy el chatbot Epami, gracias por tomarte el tiempo para realizar esta entrevista. Vamos a comenzar. No estas obligado a responder las preguntas que no quieras, simplemente puedes decirme que pasemos a la siguiente. Si alguna pregunta no se entiende, puedes pedirme que la repite. Vamos a comenzar.")
-
+    
     # Display existing chat messages
     for message in st.session_state.messages:
         if message["role"] != "system":
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
-                if message["role"] == "assistant":
-                    audio = generate_speech(message["content"])
-                    st.audio(audio, format="audio/mp3")
+                #VOICE if message["role"] == "assistant":
+                    #VOICE audio = generate_speech(message["content"])
+                    #VOICE st.audio(audio, format="audio/mp3", autoplay=False)
 
     # Chat input
-    if prompt := st.chat_input("Hola ¿Como esta usted?"):
+    if prompt := st.chat_input(""):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -118,19 +139,42 @@ else:
         assistant_response = response.choices[0].message.content
         with st.chat_message("assistant"):
             st.markdown(assistant_response)
-            audio = generate_speech(assistant_response)
-            st.audio(audio, format="audio/mp3")
+            #VOICE audio = generate_speech(assistant_response)
+            #VOICE st.audio(audio, format="audio/mp3",autoplay=True)
         st.session_state.messages.append({"role": "assistant", "content": assistant_response})
-
+        
 # Only show the "Clear Conversation" button if there's more than just the system message
 # It checks if there's more than one message in the conversation (the first message is always the system message).
 # If there are additional messages, it displays the "Clear Conversation" button.
 
 if len(st.session_state.messages) > 1:
-    if st.button("Clear Conversation"):
+    if st.button("Terminar Entrevista",type="primary"):
+        full_messages =  st.session_state.messages.copy()        
+        full_messages.append({
+            "role":"system", 
+            "content":"crea un resumen de la entrevista en un maximo aproximado de 200 caracteres. Determinando si es positivo o negativo con una escala del 0 al 1 donde zero es totalmente negativo y 1 es totalmente positivo."
+            })
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=full_messages,
+            temperature=0.4,
+        )
+        st.title("Analyzando entrevista...")
+        payload = json.dumps({
+            "link_id": "P0mH7",
+            "name": "Epami",
+            "comment": response.choices[0].message.content
+            })
+        headers = {'Content-Type': 'application/json'}
+        responseJamtools = requests.request("POST", url, headers=headers, data=payload)
+        # Convertir la respuesta a un diccionario de Python
+        response_json = json.loads(responseJamtools.text)
+        # Acceder al valor de "success"
+        success = response_json['success']
+        # Validación y mensaje
+        if success:
+            st.title(":blue[El resumen de la entrevista fue exitoso.]")
+        else:
+            st.title(":red[El resumen de la entrevista no fue exitoso.]")
         st.session_state.messages = [st.session_state.messages[0]]  # Keep only the system message
         st.rerun()
-    #if st.button("Finish Conversation"):
-    #    st.title("Ending Conversation")
-    #    st.title("Creating a summary of the conversation...")
-    #    st.title("Sending conversation to the server...")
